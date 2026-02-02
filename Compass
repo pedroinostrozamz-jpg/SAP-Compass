@@ -1,0 +1,53 @@
+import streamlit as st
+import os
+import time
+import tempfile
+import pdfkit
+from datetime import datetime
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from google import genai
+import requests
+
+# --- CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="Analista Corporativo AI", layout="wide")
+
+# --- SECRETOS (Para no exponer tus llaves) ---
+# En Streamlit se recomienda usar st.secrets
+API_KEY = st.secrets.get("AIzaSyAIQHnqUOskOEhSrkjkVToEYEGgk7PoE5s", "TU_KEY_POR_DEFECTO")
+SERPAPI_KEY = st.secrets.get("8cfbb62e81bcf585e7e7730f8537787f9c3db65b3c745e473f359ae1b8f1e752", "TU_KEY_POR_DEFECTO")
+MODELO = "gemini-2.5-flash"
+
+# ... (Aquí pegas todas tus funciones: buscar_mercantil, buscar_directorio_serpapi, consultar_gemini, etc.) ...
+
+# --- INTERFAZ DE STREAMLIT ---
+st.title("🏛️ Buscador Corporativo AI")
+st.markdown("Generación de informes ejecutivos con Gemini y SERPapi")
+
+with st.sidebar:
+    st.header("Configuración")
+    empresa_input = st.text_input("Nombre de la Empresa")
+    pais_input = st.text_input("País")
+    buscar_btn = st.button("Generar Informe", type="primary")
+
+if buscar_btn:
+    if not empresa_input:
+        st.error("Por favor, ingresa el nombre de una empresa.")
+    else:
+        with st.status(" Consultando fuentes y generando informe...", expanded=True) as status:
+            st.write("Conectando con Gemini...")
+            # Llamamos a tu función original
+            html_content, pdf_path = generar_informe(empresa_input, pais_input)
+            status.update(label=" ¡Informe Generado!", state="complete", expanded=False)
+
+        # Mostrar el HTML dentro de la app
+        st.components.v1.html(html_content, height=800, scrolling=True)
+
+        # Botón de descarga para el PDF
+        if pdf_path:
+            with open(pdf_path, "rb") as f:
+                st.download_button(
+                    label="Descargar Informe PDF",
+                    data=f,
+                    file_name=f"Informe_{empresa_input}.pdf",
+                    mime="application/pdf"
+                )
