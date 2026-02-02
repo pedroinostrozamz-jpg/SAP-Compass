@@ -1,42 +1,39 @@
-import streamlit as st
-import requests
-import json
 import os
 import time
 import tempfile
+import pdfkit
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from weasyprint import HTML, CSS
 from google import genai
+import streamlit as st
+import requests
+import json
 
-# ===========================
+# =============================
 # CONFIGURACIÓN STREAMLIT
-# ===========================
-st.set_page_config(
-    page_title="Informe Corporativo estilo SAP — Gemini + SerpAPI",
-    layout="wide",
-)
+# =============================
+st.set_page_config(page_title="SAP Compass — Corporate Finder", layout="wide")
 
-# ===========================
-# CARGA DE SECRETS
-# ===========================
+# =============================
+# KEYS DESDE STREAMLIT SECRETS
+# =============================
 API_KEY = st.secrets["API_KEY"]
 SERPAPI_KEY = st.secrets["SERPAPI_KEY"]
-
 MODELO = "gemini-2.5-flash"
 TIEMPO_ENTRE_PREGUNTAS = 5
 
-# Inicializar Gemini
+# Iniciar cliente Gemini
 try:
     client = genai.Client(api_key=API_KEY)
 except Exception as e:
     client = None
-    st.error("Error inicializando Gemini. Revisa tu API KEY.")
+    st.error("❌ Error inicializando Gemini. Revisa tu API Key en Streamlit Secrets.")
+    st.stop()
 
 
-# ===========================
-# FUNCIÓN: Buscar Mercantil
-# ===========================
+# =============================
+# FUNCIÓN: MERCANTIL.COM
+# =============================
 def buscar_mercantil(empresa, pais):
     pais = (pais or "").strip().lower()
 
@@ -50,14 +47,13 @@ def buscar_mercantil(empresa, pais):
         "q": query,
         "hl": "es",
         "gl": "cl",
-        "api_key": SERPAPI_KEY,
+        "api_key": SERPAPI_KEY
     }
 
     try:
         r = requests.get("https://serpapi.com/search", params=params)
         if r.status_code != 200:
             return ""
-
         data = r.json()
 
         if "organic_results" in data:
@@ -65,47 +61,44 @@ def buscar_mercantil(empresa, pais):
                 link = item.get("link", "")
                 if "mercantil.com" in link.lower():
                     return link
-
     except:
-        pass
+        return ""
 
     return ""
 
 
-# ===========================
-# FUNCIÓN: Directorio SerpAPI
-# ===========================
+# =============================
+# DIRECTORIO SERPAPI
+# =============================
 def buscar_directorio_serpapi(empresa, pais):
-    query = f"Directorio ejecutivo {empresa} {pais} CEO CFO gerente general LinkedIn sitio web"
+    query = f"Directorio ejecutivo {empresa} {pais} CEO CFO gerente general sitio web LinkedIn"
 
     params = {
         "engine": "google",
         "q": query,
         "hl": "es",
         "gl": "cl",
-        "api_key": SERPAPI_KEY,
+        "api_key": SERPAPI_KEY
     }
 
     r = requests.get("https://serpapi.com/search", params=params)
 
     if r.status_code != 200:
-        return f"No fue posible obtener directorio. Código: {r.status_code}"
+        return f"No fue posible obtener información del directorio (Código {r.status_code})."
 
     data = r.json()
     texto = ""
 
-    # Extraer Knowledge Graph
     if "knowledge_graph" in data:
         kg = data["knowledge_graph"]
         if "people" in kg:
-            texto += "Personas identificadas:\n"
+            texto += "Personas identificadas en Google:\n"
             for p in kg["people"]:
                 nombre = p.get("name", "Sin nombre")
                 cargo = p.get("role", "Cargo no especificado")
                 link = p.get("link", "")
                 texto += f"- {nombre} — {cargo} ({link})\n"
 
-    # Extraer resultados orgánicos
     if "organic_results" in data:
         texto += "\nResultados relevantes:\n"
         for r2 in data["organic_results"][:5]:
@@ -115,159 +108,92 @@ def buscar_directorio_serpapi(empresa, pais):
             texto += f"- {t}: {s} ({l})\n"
 
     if not texto.strip():
-        texto = "No se encontraron directivos en Google."
+        texto = "No se encontraron datos relevantes del directorio."
 
     return texto
 
 
-# ===========================
-# TEMPLATE HTML COMPATIBLE
-# ===========================
-
+# =============================
+# TEMPLATE HTML (SAP STYLE)
+# =============================
 TEMPLATE_HTML = """
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8"/>
-<title>{{ empresa }} — Informe</title>
-
-<style>
-
-body {
-    font-family: "Segoe UI", Arial, sans-serif;
-    background: #f5f5f5;
-    margin: 0;
-    padding: 20px;
-}
-
-.wrapper {
-    width: 100%;
-    max-width: 1100px;
-    margin: auto;
-    background: white;
-    padding: 18px;
-    border: 1px solid #ccc;
-}
-
-.header {
-    background: #0F6CBD;
-    color: white;
-    padding: 18px;
-    text-align: center;
-}
-
-.header-title {
-    font-size: 26px;
-    font-weight: bold;
-}
-
-.sub {
-    font-size: 14px;
-    margin-top: 4px;
-}
-
-.columns {
-    width: 100%;
-}
-
-.col-left {
-    width: 68%;
-    float: left;
-    margin-right: 2%;
-}
-
-.col-right {
-    width: 30%;
-    float: left;
-}
-
-.card {
-    background: #ffffff;
-    border-left: 6px solid #0F6CBD;
-    padding: 12px;
-    margin-bottom: 12px;
-}
-
-.card h2 {
-    color: #073B62;
-    margin: 0 0 6px 0;
-}
-
-.footer {
-    clear: both;
-    text-align: right;
-    margin-top: 25px;
-    font-size: 12px;
-    color: #555;
-}
-
-a {
-    color: #0F6CBD;
-    text-decoration: none;
-}
-
-.noticia {
-    border-bottom: 1px solid #eee;
-    padding: 6px 0;
-}
-
-</style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ empresa }} — Informe</title>
+  <style>
+    :root{
+      --sap-blue: #0F6CBD;
+      --sap-dark-blue: #073B62;
+      --sap-yellow: #FFC515;
+      --sap-gray: #F5F6F7;
+      --card-bg: #ffffff;
+      --max-width: 1100px;
+    }
+    body { font-family: "Segoe UI", Roboto, Arial, sans-serif; background: #efefef; margin: 0; padding: 18px; }
+    .portada { max-width: var(--max-width); margin: 10px auto; background: #fff; border-radius: 10px; padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.08); }
+    .header-sap { background: var(--sap-blue); color: white; padding: 18px; border-radius: 8px; text-align: center; }
+    .titulo-empresa { margin: 0; font-size: 28px; font-weight: 700; }
+    .subtitulo-info { margin: 6px 0 0; color: #e6f0ff; font-size: 14px; }
+    .contenido { display: flex; gap: 20px; margin-top: 18px; flex-wrap: wrap; }
+    .col-izquierda { flex: 2; min-width: 300px; }
+    .col-derecha { flex: 1; min-width: 240px; }
+    .card { background: var(--card-bg); padding: 14px; border-left: 6px solid var(--sap-blue); border-radius: 8px; margin-bottom: 12px; }
+    .card h2 { color: var(--sap-dark-blue); margin: 0 0 8px 0; }
+    .contenido-texto { color: #222; line-height: 1.45; font-size: 14px; }
+    .noticia { border-bottom: 1px solid #eee; padding: 8px 0; }
+    a { color: var(--sap-blue); text-decoration: none; font-weight: 600; }
+    .footer { margin-top: 18px; text-align: right; color: #666; font-size: 12px; }
+  </style>
 </head>
-
 <body>
-<div class="wrapper">
-
-    <div class="header">
-        <div class="header-title">{{ empresa }}</div>
-        <div class="sub">{{ pais }} — {{ fecha }}</div>
+  <div class="portada">
+    <div class="header-sap">
+      <div class="titulo-empresa">{{ empresa }}</div>
+      <div class="subtitulo-info">{{ pais }} — {{ fecha }}</div>
     </div>
 
-    <div class="columns">
-
-        <!-- Columna izquierda -->
-        <div class="col-left">
-
-            <div class="card">
-                <h2>Misión y Visión</h2>
-                <div>{{ mision_vision | safe }}</div>
-            </div>
-
-            <div class="card">
-                <h2>Noticias</h2>
-                <div>{{ noticias | safe }}</div>
-            </div>
-
+    <div class="contenido">
+      <div class="col-izquierda">
+        <div class="card">
+          <h2>Misión y Visión</h2>
+          <div class="contenido-texto">{{ mision_vision | safe }}</div>
         </div>
 
-        <!-- Columna derecha -->
-        <div class="col-right">
+        <div class="card">
+          <h2>Noticias principales</h2>
+          <div class="noticias">
+            {{ noticias | safe }}
+          </div>
+        </div>
+      </div>
 
-            <div class="card">
-                <h2>Directivos</h2>
-                <div>{{ directivos | safe }}</div>
-            </div>
-
-            {% if mercantil %}
-            <div class="card">
-                <h2>Mercantil.com</h2>
-                <a href="{{ mercantil }}" target="_blank">{{ mercantil }}</a>
-            </div>
-            {% endif %}
-
-            <div class="card">
-                <h2>Sitio Web Oficial</h2>
-                <a href="{{ web }}" target="_blank">{{ web }}</a>
-            </div>
-
+      <div class="col-derecha">
+        <div class="card">
+          <h2>Directivos</h2>
+          <div class="contenido-texto">{{ directivos | safe }}</div>
         </div>
 
+        {% if mercantil %}
+        <div class="card">
+          <h2>Mercantil.com (Chile)</h2>
+          <p><a href="{{ mercantil }}" target="_blank">{{ mercantil }}</a></p>
+        </div>
+        {% endif %}
+
+        <div class="card">
+          <h2>Sitio Web Oficial</h2>
+          <p><a href="{{ web }}" target="_blank">{{ web }}</a></p>
+        </div>
+      </div>
     </div>
 
     <div class="footer">
-        Generado: {{ fecha_hora }}
+      Generado: {{ fecha_hora }}
     </div>
-
-</div>
+  </div>
 </body>
 </html>
 """
@@ -276,117 +202,95 @@ env = Environment(loader=FileSystemLoader("."), autoescape=select_autoescape(['h
 template = env.from_string(TEMPLATE_HTML)
 
 
-# ===========================
+# =============================
 # CONSULTA A GEMINI
-# ===========================
+# =============================
 def consultar_gemini(empresa, pais):
-    if not client:
-        raise RuntimeError("Gemini no inicializado.")
-
-    directorio_google = buscar_directorio_serpapi(empresa, pais)
-
     prompts = {
         "directivos": (
-            f"Con la siguiente información obtenida de Google/SerpAPI, identifica únicamente los directivos reales "
-            f"de {empresa} en {pais}. NO inventes datos.\n\n"
-            f"=== DATOS GOOGLE ===\n{directorio_google}\n\n"
-            "Devuelve nombre, cargo y enlace si existe."
+            f"Usa SOLO la siguiente información recopilada desde Google/SerpAPI para identificar "
+            f"a directivos de {empresa} en {pais}. No inventes nada.\n\n"
+            f"=== DATOS GOOGLE ===\n{buscar_directorio_serpapi(empresa, pais)}"
         ),
         "mision_vision": (
-            f"Obtén la misión y visión corporativa de {empresa}. Si no existen explícitamente, resume propósito corporativo."
+            f"Busca misión y visión corporativa de {empresa}. "
+            "Si no existe explícitamente, resume propósito corporativo desde 'Quiénes somos'."
         ),
         "noticias": (
-            f"Dame exactamente 3 noticias relevantes de negocios sobre {empresa} en {pais}, de los últimos 12 meses, "
-            "cada una con un resumen breve y link."
+            f"Da 3 noticias relevantes de {empresa} en {pais} (últimos 12 meses). "
+            "Formato: 1 línea por noticia + link."
         ),
-        "web": (
-            f"Dime la URL oficial de {empresa}. Solo la URL."
-        ),
+        "web": f"Devuelve SOLO la URL oficial principal de {empresa}."
     }
 
     resultados = {}
 
     for clave, prompt in prompts.items():
-        try:
-            resp = client.models.generate_content(
-                model=MODELO,
-                contents=[{"role": "user", "parts": [{"text": prompt}]}],
-            )
-            resultados[clave] = resp.text.strip()
-        except Exception as e:
-            resultados[clave] = f"Error: {e}"
-
+        resp = client.models.generate_content(
+            model=MODELO,
+            contents=[{"role": "user", "parts": [{"text": prompt}]}]
+        )
+        resultados[clave] = resp.text.strip()
         time.sleep(TIEMPO_ENTRE_PREGUNTAS)
 
     return resultados
 
 
-# ===========================
-# Generar reporte + PDF
-# ===========================
+# =============================
+# GENERAR INFORME + PDF
+# =============================
 def generar_informe(empresa, pais):
-    empresa = (empresa or "").strip()
-    pais = (pais or "").strip()
-
     resultados = consultar_gemini(empresa, pais)
 
-    # Mercantil
-    link_mercantil = buscar_mercantil(empresa, pais)
-
-    # Noticias → HTML
     noticias_html = ""
-    items = resultados["noticias"].split("\n")
-    for item in items:
+    for item in resultados["noticias"].split("\n"):
         if item.strip():
             noticias_html += f"<div class='noticia'>{item}</div>"
 
-    fecha = datetime.now().strftime("%d-%m-%Y")
-    fecha_hora = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-
     html = template.render(
         empresa=empresa,
-        pais=pais,
-        fecha=fecha,
-        fecha_hora=fecha_hora,
+        pais=pais or "—",
+        fecha=datetime.now().strftime("%d-%m-%Y"),
+        fecha_hora=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
         mision_vision=resultados["mision_vision"].replace("\n", "<br>"),
         directivos=resultados["directivos"].replace("\n", "<br>"),
         noticias=noticias_html,
         web=resultados["web"],
-        mercantil=link_mercantil,
+        mercantil=buscar_mercantil(empresa, pais)
     )
 
-    # Crear PDF con WeasyPrint
-    tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    HTML(string=html).write_pdf(tmp_pdf.name)
+    # PDFkit
+    config = pdfkit.configuration(wkhtmltopdf="/usr/bin/wkhtmltopdf")
+    pdf_bytes = pdfkit.from_string(html, False, configuration=config)
 
-    return html, tmp_pdf.name
+    return html, pdf_bytes
 
 
-# ===========================
-# UI STREAMLIT
-# ===========================
-st.title("📄 Informe Corporativo — SAP Style (Gemini + SerpAPI)")
+# =============================
+# INTERFAZ STREAMLIT
+# =============================
+st.title("🔎 SAP Compass — Corporate Finder")
+st.write("Genera informes corporativos estilo SAP usando Gemini + Google SERPAPI")
 
-empresa = st.text_input("Empresa")
+empresa = st.text_input("Nombre de la Empresa")
 pais = st.text_input("País")
-btn = st.button("Generar Informe")
 
-if btn:
+if st.button("Generar Informe"):
     if not empresa.strip():
-        st.error("Debe ingresar una empresa.")
+        st.error("Debes ingresar un nombre de empresa.")
         st.stop()
 
-    with st.spinner("Generando informe corporativo..."):
-        html, pdf_path = generar_informe(empresa, pais)
+    with st.spinner("Generando informe..."):
+        html, pdf_bytes = generar_informe(empresa, pais)
 
     st.success("Informe generado correctamente.")
 
-    st.download_button(
-        "📥 Descargar PDF",
-        data=open(pdf_path, "rb").read(),
-        file_name=f"Informe_{empresa}.pdf",
-        mime="application/pdf",
-    )
+    st.markdown("### 📄 Vista previa del informe")
+    st.components.v1.html(html, height=900, scrolling=True)
 
-    st.markdown("### Vista previa HTML")
-    st.markdown(html, unsafe_allow_html=True)
+    st.download_button(
+        label="📥 Descargar PDF",
+        data=pdf_bytes,
+        file_name=f"Informe_{empresa}.pdf",
+        mime="application/pdf"
+    )
