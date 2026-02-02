@@ -147,7 +147,7 @@ empresa_input = st.sidebar.text_input("Nombre de la Empresa", placeholder="Ej: G
 pais_input = st.sidebar.text_input("País", placeholder="Ej: Chile")
 buscar_btn = st.sidebar.button("Generar Informe Ejecutivo", type="primary")
 
-st.title("🏛️ Buscador Corporativo AI")
+st.title("SAP Compass")
 st.info("Introduce los datos en la izquierda para comenzar el análisis.")
 
 if buscar_btn:
