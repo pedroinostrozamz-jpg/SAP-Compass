@@ -13,8 +13,8 @@ st.set_page_config(page_title="Analista Corporativo AI", layout="wide", page_ico
 
 # --- CONFIGURACIÓN DE LLAVES (Secrets de Streamlit) ---
 # En Streamlit Cloud, configurarás estas llaves en el panel de Settings
-API_KEY = st.secrets.get("AIzaSyAIQHnqUOskOEhSrkjkVToEYEGgk7PoE5s", "")
-SERPAPI_KEY = st.secrets.get("8cfbb62e81bcf585e7e7730f8537787f9c3db65b3c745e473f359ae1b8f1e752", "")
+API_KEY = st.secrets.get("GEMINI_KEY", "")
+SERPAPI_KEY = st.secrets.get("SERPAPI_KEY", "")
 MODELO = "gemini-2.5-flash" # Actualizado a la versión estable
 TIEMPO_ENTRE_PREGUNTAS = 5
 
