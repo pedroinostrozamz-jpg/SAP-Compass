@@ -1,284 +1,307 @@
 import streamlit as st
-import os
-import time
-import tempfile
-import pdfkit
-from datetime import datetime
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-from google import genai
+import json
+import datetime
 import requests
+from jinja2 import Template
+import pdfkit
+from serpapi import GoogleSearch
+from google import genai
 
-# =============================
-# CONFIG DE STREAMLIT
-# =============================
-st.set_page_config(page_title="Analista Corporativo AI", layout="wide", page_icon="🏛️")
+# ----------------------------
+# CONFIGURACIÓN STREAMLIT
+# ----------------------------
+st.set_page_config(page_title="Informe Corporativo", layout="wide")
 
-API_KEY = st.secrets.get("GEMINI_KEY", "")
-SERPAPI_KEY = st.secrets.get("SERPAPI_KEY", "")
-MODELO = "gemini-2.5-flash"
-TIEMPO_ENTRE_PREGUNTAS = 4
+# ----------------------------
+# CONFIGURACIÓN API KEYS
+# ----------------------------
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+SERPAPI_KEY = st.secrets["SERPAPI_KEY"]
 
-# =============================
-# CLIENTE GEMINI
-# =============================
-@st.cache_resource
-def get_gemini_client():
-    if not API_KEY:
-        return None
+client = genai.Client(api_key=GEMINI_API_KEY)
+
+# ----------------------------
+# TEMPLATE HTML SAP (COMPLETO)
+# ----------------------------
+TEMPLATE_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<style>
+body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f4f6f9; }
+.header { background: #003366; padding: 20px; color: white; text-align: center; }
+.container { display: flex; padding: 20px; }
+.col { width: 50%; padding: 20px; }
+.card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+h2 { color: #003366; margin-top: 0; }
+ul { padding-left: 18px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Informe Corporativo: {{ empresa }}</h1>
+  <p>{{ fecha }} — País: {{ pais }}</p>
+</div>
+
+<div class="container">
+  <div class="col">
+
+    {% if mision_vision %}
+    <div class="card">
+      <h2>Misión y Visión</h2>
+      <p>{{ mision_vision }}</p>
+    </div>
+    {% endif %}
+
+    {% if directivos %}
+    <div class="card">
+      <h2>Directivos Principales</h2>
+      <ul>
+        {% for d in directivos %}
+          <li>
+            <strong>{{ d.nombre }}</strong> — {{ d.cargo }}
+            {% if d.linkedin %}
+            <br><a href="{{ d.linkedin }}" target="_blank">LinkedIn</a>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if noticias %}
+    <div class="card">
+      <h2>Noticias Relevantes</h2>
+      <ul>
+        {% for n in noticias %}
+        <li>{{ n.titulo }} — <a href="{{ n.link }}" target="_blank">Enlace</a></li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+  </div>
+
+
+  <div class="col">
+
+    {% if web %}
+    <div class="card">
+      <h2>Página Corporativa</h2>
+      <a href="{{ web }}" target="_blank">{{ web }}</a>
+    </div>
+    {% endif %}
+
+    {% if mercantil %}
+    <div class="card">
+      <h2>Mercantil (Chile)</h2>
+      <a href="{{ mercantil }}" target="_blank">{{ mercantil }}</a>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+
+</body>
+</html>
+"""
+
+
+# ----------------------------
+# FUNCIONES DE CONSULTA
+# ----------------------------
+
+def serpapi_busqueda_linkedin(nombre, empresa, pais):
+    """Devuelve un link REAL de LinkedIn usando SerpAPI."""
     try:
-        return genai.Client(api_key=API_KEY)
+        query = f"{nombre} {empresa} {pais} site:linkedin.com"
+        params = {
+            "engine": "google",
+            "q": query,
+            "api_key": SERPAPI_KEY
+        }
+        search = GoogleSearch(params)
+        results = search.get_dict()
+
+        if "organic_results" in results:
+            for r in results["organic_results"]:
+                link = r.get("link", "")
+                if "linkedin.com/in" in link:
+                    return link
+
     except:
         return None
 
-client = get_gemini_client()
+    return None
 
-# =============================
-# FUNCIONES DE BÚSQUEDA
-# =============================
 
-def buscar_mercantil(empresa, pais):
-    # Solo si el país es Chile
-    if pais.strip().lower() not in ["chile", "cl"]:
+def generar_directivos(empresa, pais):
+    """Obtiene directivos reales vía Gemini + valida LinkedIn vía SerpAPI."""
+    prompt = f"""
+    Lista 5 directivos REALES de {empresa} en {pais}.
+    Devuelve SOLO un JSON válido con:
+    - nombre
+    - cargo
+
+    Ejemplo:
+    [
+      {{"nombre": "Jane Doe", "cargo": "Gerente General"}},
+      ...
+    ]
+
+    No inventes personas. Si no existen específicamente en {pais}, usa los directivos del país más cercano o la matriz.
+    """
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt
+        )
+
+        text = response.text.strip()
+
+        try:
+            directivos = json.loads(text)
+        except:
+            import re
+            m = re.search(r"\[.*\]", text, re.DOTALL)
+            if m:
+                directivos = json.loads(m.group(0))
+            else:
+                return []
+
+        # Agregar LinkedIn verificado por SerpAPI
+        for d in directivos:
+            link = serpapi_busqueda_linkedin(d["nombre"], empresa, pais)
+            d["linkedin"] = link
+
+        return directivos
+
+    except:
+        return []
+
+
+def generar_mision_vision(empresa, pais):
+    prompt = f"""
+    Entrega la misión y visión de {empresa} en {pais}.
+    Debe ser texto conciso en 8 líneas máximo.
+    No inventes información.
+    """
+    try:
+        r = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt
+        )
+        return r.text.strip()
+    except:
         return ""
 
-    query = f"{empresa} Chile mercantil"
+
+def generar_noticias(empresa, pais):
+    prompt = f"""
+    Devuelve exactamente 3 noticias REALES de negocios sobre {empresa} en {pais},
+    ocurridas en los últimos 12 meses.
+    Cada noticia debe tener:
+    - título
+    - link real (obligatorio)
+
+    Formato JSON.
+    """
+    try:
+        r = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt
+        )
+        text = r.text.strip()
+        try:
+            return json.loads(text)
+        except:
+            import re
+            m = re.search(r"\[.*\]", text, re.DOTALL)
+            return json.loads(m.group(0)) if m else []
+    except:
+        return []
+
+
+def buscar_web_corporativa(empresa, pais):
+    prompt = f"""
+    Devuélveme el link de la página corporativa REAL de {empresa} en {pais}.
+    Solo URL exacta. Nada más.
+    """
+    try:
+        r = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt
+        )
+        return r.text.strip()
+    except:
+        return ""
+
+
+def buscar_mercantil(empresa, pais):
     params = {
         "engine": "google",
-        "q": query,
-        "hl": "es",
-        "gl": "cl",
+        "q": f"{empresa} sitio:mercantil.com",
         "api_key": SERPAPI_KEY
     }
+    search = GoogleSearch(params)
+    results = search.get_dict()
 
-    try:
-        r = requests.get("https://serpapi.com/search", params=params)
-        if r.status_code == 200:
-            data = r.json()
-            for item in data.get("organic_results", []):
-                link = item.get("link", "")
-                if "mercantil.com" in link.lower():
-                    return link
-    except:
-        pass
+    if "organic_results" in results:
+        for r in results["organic_results"]:
+            if "mercantil.com" in r.get("link", ""):
+                return r["link"]
 
     return ""
 
 
-def buscar_directorio_serpapi(empresa, pais):
-    query = f"Directorio ejecutivo {empresa} {pais} CEO CFO Gerente General"
-    params = {
-        "engine": "google",
-        "q": query,
-        "hl": "es",
-        "gl": "cl",
-        "api_key": SERPAPI_KEY
-    }
+# ----------------------------
+# INTERFAZ STREAMLIT
+# ----------------------------
 
-    try:
-        r = requests.get("https://serpapi.com/search", params=params)
-        if r.status_code != 200:
-            return ""
+st.title("📄 Generador de Informe Corporativo")
 
-        data = r.json()
-        texto = ""
+empresa = st.text_input("Nombre de la empresa")
+pais = st.text_input("País del análisis", value="Chile")
 
-        # Knowledge graph
-        if "knowledge_graph" in data and "people" in data["knowledge_graph"]:
-            for p in data["knowledge_graph"]["people"]:
-                texto += f"- {p.get('name')} — {p.get('role')}\n"
+if st.button("Generar Informe"):
+    if not empresa or not pais:
+        st.error("Debes ingresar empresa y país.")
+        st.stop()
 
-        # Primeros orgs
-        for r2 in data.get("organic_results", [])[:5]:
-            texto += f"- {r2.get('title')} — {r2.get('snippet')}\n"
+    with st.spinner("Generando informe..."):
 
-        return texto or ""
-    except:
-        return ""
+        mision_vision = generar_mision_vision(empresa, pais)
+        directivos = generar_directivos(empresa, pais)
+        noticias = generar_noticias(empresa, pais)
+        web = buscar_web_corporativa(empresa, pais)
+        mercantil = buscar_mercantil(empresa, pais)
 
-
-def consultar_gemini(empresa, pais):
-    if not client:
-        st.error("Error: Falta configurar GEMINI_KEY en Secrets.")
-        return None
-
-    # Entrada obligatoria del directorio
-    directorio_google = buscar_directorio_serpapi(empresa, pais)
-
-    prompts = {
-        "directivos": (
-            f"Usa SOLO esta información real encontrada: {directorio_google}."
-            f" Devuélveme una lista limpia de directivos de {empresa} en {pais}. "
-            f"Si aparece información de otro país, DESCÁRTALA."
-        ),
-
-        "mision_vision": (
-            f"Busca y resume EXCLUSIVAMENTE la misión y visión de {empresa} en {pais}. "
-            f"Si aparecen versiones de otros países, IGNÓRALAS."
-        ),
-
-        "noticias": (
-            f"Busca EXCLUSIVAMENTE noticias de negocios sobre {empresa} en {pais}. "
-            f"NO incluyas noticias de otros países. "
-            f"Devuélveme exactamente 3 noticias del último año, cada una en 1 línea con su link."
-        ),
-
-        "web": (
-            f"Identifica la URL oficial de la empresa {empresa} en {pais}. "
-            f"Devuelve SOLO la URL."
+        template = Template(TEMPLATE_HTML)
+        html_final = template.render(
+            empresa=empresa,
+            pais=pais,
+            fecha=datetime.date.today().strftime("%d-%m-%Y"),
+            mision_vision=mision_vision,
+            directivos=directivos,
+            noticias=noticias,
+            web=web,
+            mercantil=mercantil
         )
-    }
 
-    resultados = {}
-    for clave, prompt in prompts.items():
-        try:
-            resp = client.models.generate_content(model=MODELO, contents=prompt)
-            resultados[clave] = resp.text.strip()
-            time.sleep(TIEMPO_ENTRE_PREGUNTAS)
-        except Exception as e:
-            resultados[clave] = f"Error: {e}"
+        # Mostrar HTML en pantalla
+        st.components.v1.html(html_final, height=1100, scrolling=True)
 
-    return resultados
+        # Descargar PDF
+        pdf_path = f"Informe_{empresa}.pdf"
+        pdfkit.from_string(html_final, pdf_path)
 
-
-# =============================
-# TEMPLATE HTML CORPORATIVO SAP (VERSIÓN COLAB)
-# =============================
-
-TEMPLATE_HTML = """
-<style>
-    body {
-        background-color: #f0f2f5;
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 0;
-    }
-    .contenedor {
-        width: 90%;
-        margin: auto;
-        margin-top: 20px;
-        background: white;
-        padding: 25px;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        border-left: 10px solid #0F6CBD;
-    }
-    h1 {
-        color: #073B62;
-        margin-bottom: 5px;
-    }
-    h2 {
-        color: #0F6CBD;
-        margin-top: 20px;
-    }
-    .card {
-        border-left: 6px solid #0F6CBD;
-        padding: 15px;
-        background: #f7f9fc;
-        margin-bottom: 20px;
-        border-radius: 8px;
-    }
-    .seccion {
-        margin-top: 30px;
-    }
-</style>
-
-<div class="contenedor">
-
-    <h1>Informe: {{ empresa }}</h1>
-    <p><b>{{ pais }}</b> | {{ fecha }}</p>
-
-    {% if mercantil %}
-    <div class="card">
-        <h2>Registro Mercantil (Chile)</h2>
-        <a href="{{ mercantil }}">{{ mercantil }}</a>
-    </div>
-    {% endif %}
-
-    <div class="card">
-        <h2>Misión y Visión</h2>
-        <p>{{ mision_vision | safe }}</p>
-    </div>
-
-    <div class="card">
-        <h2>Directivos</h2>
-        <p>{{ directivos | safe }}</p>
-    </div>
-
-    <div class="card">
-        <h2>Noticias Recientes</h2>
-        <p>{{ noticias | safe }}</p>
-    </div>
-
-    <div class="card">
-        <h2>Web Oficial</h2>
-        <a href="{{ web }}">{{ web }}</a>
-    </div>
-
-</div>
-"""
-
-
-# =============================
-# GENERACIÓN DEL INFORME + PDF
-# =============================
-
-def generar_informe(empresa, pais):
-    resultados = consultar_gemini(empresa, pais)
-    if not resultados:
-        return None, None
-
-    link_mercantil = buscar_mercantil(empresa, pais)
-
-    env = Environment(autoescape=select_autoescape(['html']))
-    template = env.from_string(TEMPLATE_HTML)
-
-    html = template.render(
-        empresa=empresa,
-        pais=pais,
-        fecha=datetime.now().strftime("%d-%m-%Y"),
-        mision_vision=resultados.get("mision_vision", "").replace("\n", "<br>"),
-        directivos=resultados.get("directivos", "").replace("\n", "<br>"),
-        noticias=resultados.get("noticias", "").replace("\n", "<br>"),
-        web=resultados.get("web", ""),
-        mercantil=link_mercantil
-    )
-
-    config = pdfkit.configuration(wkhtmltopdf="/usr/bin/wkhtmltopdf")
-    tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-
-    try:
-        pdfkit.from_string(html, tmp_pdf.name, configuration=config)
-        return html, tmp_pdf.name
-    except:
-        return html, None
-
-
-# =============================
-# UI STREAMLIT
-# =============================
-
-st.sidebar.title(" Panel de Control")
-empresa_input = st.sidebar.text_input("Empresa", placeholder="Ej: Falabella")
-pais_input = st.sidebar.text_input("País", placeholder="Ej: Chile")
-btn = st.sidebar.button("Generar Informe", type="primary")
-
-st.title("Generador de Informes Empresariales AI")
-st.info("Completa los datos en el panel izquierdo para generar el informe corporativo.")
-
-if btn:
-    if not empresa_input or not pais_input:
-        st.warning("Faltan datos obligatorios.")
-    else:
-        with st.status("Generando informe...", expanded=True) as status:
-            html_res, pdf_res = generar_informe(empresa_input, pais_input)
-            status.update(label="Informe listo", state="complete")
-
-        st.components.v1.html(html_res, height=750, scrolling=True)
-
-        if pdf_res:
-            with open(pdf_res, "rb") as f:
-                st.download_button(
-                    "📄 Descargar PDF",
-                    f,
-                    file_name=f"Informe_{empresa_input}.pdf"
-                )
+        with open(pdf_path, "rb") as f:
+            btn = st.download_button(
+                label="📥 Descargar PDF",
+                data=f,
+                file_name=pdf_path,
+                mime="application/pdf"
+            )
