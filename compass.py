@@ -269,7 +269,7 @@ def generar_informe(empresa, pais):
 # =============================
 # INTERFAZ STREAMLIT
 # =============================
-st.title("🔎 SAP Compass — Corporate Finder")
+st.title("SAP Compass — NNN")
 st.write("Genera informes corporativos estilo SAP usando Gemini + Google SERPAPI")
 
 empresa = st.text_input("Nombre de la Empresa")
