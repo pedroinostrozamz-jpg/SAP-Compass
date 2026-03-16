@@ -534,6 +534,7 @@ def iniciales(nombre):
 # RENDERIZADO DEL INFORME
 # =============================
 def renderizar_informe(datos, linkedin_ejecutivos, mercantil_link):
+
     # ── Header empresa ──────────────────────────────────────────────
     st.markdown(f"""
     <div class="empresa-header">
@@ -564,39 +565,47 @@ def renderizar_informe(datos, linkedin_ejecutivos, mercantil_link):
     """, unsafe_allow_html=True)
 
     # ── KPIs ────────────────────────────────────────────────────────
-    st.markdown(f"""
-    <div class="kpi-grid">
+    k1, k2, k3, k4 = st.columns(4, gap="small")
+    with k1:
+        st.markdown(f"""
         <div class="kpi-card">
-            <div class="kpi-icono"></div>
+            <div class="kpi-icono">👥</div>
             <div class="kpi-valor">{datos.get('empleados', '—')}</div>
             <div class="kpi-label">Empleados</div>
-        </div>
+        </div>""", unsafe_allow_html=True)
+    with k2:
+        st.markdown(f"""
         <div class="kpi-card">
-            <div class="kpi-icono"></div>
+            <div class="kpi-icono">💰</div>
             <div class="kpi-valor">{datos.get('facturacion_anual', '—')}</div>
             <div class="kpi-label">Facturación Anual</div>
-        </div>
+        </div>""", unsafe_allow_html=True)
+    with k3:
+        st.markdown(f"""
         <div class="kpi-card">
-            <div class="kpi-icono"></div>
+            <div class="kpi-icono">🌎</div>
             <div class="kpi-valor">{datos.get('presencia_geografica', '—')}</div>
             <div class="kpi-label">Presencia</div>
-        </div>
+        </div>""", unsafe_allow_html=True)
+    with k4:
+        st.markdown(f"""
         <div class="kpi-card">
-            <div class="kpi-icono"></div>
+            <div class="kpi-icono">🚢</div>
             <div class="kpi-valor">{datos.get('importaciones_exportaciones', '—')}</div>
             <div class="kpi-label">Comercio Exterior</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Columnas principales ─────────────────────────────────────────
     col_izq, col_der = st.columns([3, 2], gap="medium")
 
     with col_izq:
+
         # Misión y Visión
         st.markdown(f"""
         <div class="card">
-            <div class="card-titulo"> Misión & Visión</div>
+            <div class="card-titulo">🎯 Misión & Visión</div>
             <p style="font-size:0.88rem; color:#374151; margin-bottom:10px;">
                 <strong>Misión:</strong> {render_valor(datos.get('mision'))}
             </p>
@@ -607,30 +616,33 @@ def renderizar_informe(datos, linkedin_ejecutivos, mercantil_link):
         """, unsafe_allow_html=True)
 
         # Tecnología IT
-        it = datos.get('tecnologia_it', '')
         st.markdown(f"""
         <div class="card">
-            <div class="card-titulo"> Tecnología & IT</div>
-            <p style="font-size:0.88rem; color:#374151; margin-bottom:12px;">{render_valor(it)}</p>
+            <div class="card-titulo">💻 Tecnología & IT</div>
+            <p style="font-size:0.88rem; color:#374151; margin:0;">
+                {render_valor(datos.get('tecnologia_it'))}
+            </p>
         </div>
         """, unsafe_allow_html=True)
 
-        # Oportunidades SAP
-        oportunidades = datos.get('oportunidades_sap', '')
-        soluciones = datos.get('soluciones_sap', '')
+        # SAP Intelligence
         st.markdown(f"""
         <div class="card">
-            <div class="card-titulo"> SAP Intelligence</div>
+            <div class="card-titulo">⚡ SAP Intelligence</div>
             <p style="font-size:0.78rem; font-weight:600; color:#B45309; margin-bottom:6px;">SOLUCIONES ACTUALES</p>
-            <p style="font-size:0.88rem; color:#374151; margin-bottom:14px;">{render_valor(soluciones)}</p>
+            <p style="font-size:0.88rem; color:#374151; margin-bottom:14px;">
+                {render_valor(datos.get('soluciones_sap'))}
+            </p>
             <p style="font-size:0.78rem; font-weight:600; color:#065F46; margin-bottom:6px;">OPORTUNIDADES IDENTIFICADAS</p>
-            <p style="font-size:0.88rem; color:#374151; margin:0;">{render_valor(oportunidades)}</p>
+            <p style="font-size:0.88rem; color:#374151; margin:0;">
+                {render_valor(datos.get('oportunidades_sap'))}
+            </p>
         </div>
         """, unsafe_allow_html=True)
 
         # Noticias
+        st.markdown('<div class="card"><div class="card-titulo">📰 Noticias Relevantes</div>', unsafe_allow_html=True)
         noticias = datos.get('noticias', [])
-        noticias_html = ""
         if noticias:
             for n in noticias:
                 titulo = n.get('titulo', '')
@@ -638,98 +650,99 @@ def renderizar_informe(datos, linkedin_ejecutivos, mercantil_link):
                 fecha = n.get('fecha', '')
                 fuente = n.get('fuente', '')
                 if titulo and "no disponible" not in titulo.lower():
-                    noticias_html += f"""
+                    st.markdown(f"""
                     <div class="noticia-item">
                         <div class="noticia-titulo">{titulo}</div>
                         <div class="noticia-resumen">{resumen}</div>
-                        <div class="noticia-meta"> {fecha} &nbsp;·&nbsp;  {fuente}</div>
+                        <div class="noticia-meta">📅 {fecha} &nbsp;·&nbsp; 📌 {fuente}</div>
                     </div>
-                    """
+                    """, unsafe_allow_html=True)
         else:
-            noticias_html = '<span class="no-disponible">No se encontraron noticias recientes.</span>'
-
-        st.markdown(f"""
-        <div class="card">
-            <div class="card-titulo">📰 Noticias Relevantes</div>
-            {noticias_html}
-        </div>
-        """, unsafe_allow_html=True)
+            st.markdown('<span class="no-disponible">No se encontraron noticias recientes.</span>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     with col_der:
-        # Ejecutivos Claude + LinkedIn
+
+        # ── Directorio Ejecutivo (100% nativo Streamlit) ─────────────
+        st.markdown('<div class="card"><div class="card-titulo">👤 Directorio Ejecutivo</div>', unsafe_allow_html=True)
+
         ejecutivos_claude = datos.get('ejecutivos_conocidos', [])
 
-        # Construir mapa de linkedin por nombre (fuzzy básico)
+        # Construir mapa LinkedIn por nombre
         linkedin_map = {}
         for li in linkedin_ejecutivos:
             nombre_li = li.get('nombre', '').lower()
             linkedin_map[nombre_li] = li
 
-        ejecutivos_html = ""
-        if ejecutivos_claude:
-            for ej in ejecutivos_claude:
-                nombre = ej.get('nombre', '')
-                cargo = ej.get('cargo', '')
-                if not nombre or "no disponible" in nombre.lower():
-                    continue
+        def buscar_linkedin_match(nombre):
+            for key, val in linkedin_map.items():
+                if nombre.split()[0].lower() in key or (key.split()[0] in nombre.lower()):
+                    return val
+            return None
 
-                # buscar coincidencia en linkedin
-                li_match = None
-                for key, val in linkedin_map.items():
-                    if nombre.split()[0].lower() in key or key.split()[0] in nombre.lower():
-                        li_match = val
-                        break
+        ejecutivos_mostrados = set()
 
-                linkedin_btn = ""
+        for ej in ejecutivos_claude:
+            nombre = ej.get('nombre', '').strip()
+            cargo = ej.get('cargo', '').strip()
+            if not nombre or "no disponible" in nombre.lower():
+                continue
+
+            ejecutivos_mostrados.add(nombre.split()[0].lower())
+            li_match = buscar_linkedin_match(nombre)
+
+            col_av, col_info = st.columns([1, 4])
+            with col_av:
+                st.markdown(f"""
+                <div class="ejecutivo-avatar" style="margin-top:4px;">{iniciales(nombre)}</div>
+                """, unsafe_allow_html=True)
+            with col_info:
+                st.markdown(f"""
+                <div class="ejecutivo-nombre">{nombre}</div>
+                <div class="ejecutivo-cargo">{cargo}</div>
+                """, unsafe_allow_html=True)
                 if li_match:
-                    linkedin_btn = f'<a class="ejecutivo-linkedin" href="{li_match["link"]}" target="_blank">in LinkedIn</a>'
+                    st.markdown(f'<a class="ejecutivo-linkedin" href="{li_match["link"]}" target="_blank">in LinkedIn</a>', unsafe_allow_html=True)
 
-                ejecutivos_html += f"""
-                <div class="ejecutivo-card">
-                    <div class="ejecutivo-avatar">{iniciales(nombre)}</div>
-                    <div class="ejecutivo-info">
-                        <div class="ejecutivo-nombre">{nombre}</div>
-                        <div class="ejecutivo-cargo">{cargo}</div>
-                    </div>
-                    {linkedin_btn}
-                </div>
-                """
+            st.markdown("<hr style='margin:6px 0; border-color:#E2E8F0;'>", unsafe_allow_html=True)
 
-        # Agregar ejecutivos encontrados en LinkedIn que no estén en Claude
-        nombres_claude = [e.get('nombre', '').lower() for e in ejecutivos_claude]
+        # Ejecutivos encontrados en LinkedIn que no estén en Claude
         for li in linkedin_ejecutivos:
-            nombre_li = li.get('nombre', '')
-            ya_incluido = any(nombre_li.split()[0].lower() in nc for nc in nombres_claude if nc)
-            if not ya_incluido and nombre_li:
-                ejecutivos_html += f"""
-                <div class="ejecutivo-card">
-                    <div class="ejecutivo-avatar">{iniciales(nombre_li)}</div>
-                    <div class="ejecutivo-info">
-                        <div class="ejecutivo-nombre">{nombre_li}</div>
-                        <div class="ejecutivo-cargo">{li.get('cargo', '')}</div>
-                    </div>
-                    <a class="ejecutivo-linkedin" href="{li.get('link', '#')}" target="_blank">in LinkedIn</a>
-                </div>
-                """
+            nombre_li = li.get('nombre', '').strip()
+            if not nombre_li:
+                continue
+            ya_incluido = any(nombre_li.split()[0].lower() in inc for inc in ejecutivos_mostrados)
+            if ya_incluido:
+                continue
 
-        if not ejecutivos_html:
-            ejecutivos_html = '<span class="no-disponible">No se encontraron ejecutivos.</span>'
+            col_av, col_info = st.columns([1, 4])
+            with col_av:
+                st.markdown(f"""
+                <div class="ejecutivo-avatar" style="margin-top:4px;">{iniciales(nombre_li)}</div>
+                """, unsafe_allow_html=True)
+            with col_info:
+                st.markdown(f"""
+                <div class="ejecutivo-nombre">{nombre_li}</div>
+                <div class="ejecutivo-cargo">{li.get('cargo', '')}</div>
+                """, unsafe_allow_html=True)
+                st.markdown(f'<a class="ejecutivo-linkedin" href="{li.get("link", "#")}" target="_blank">in LinkedIn</a>', unsafe_allow_html=True)
 
+            st.markdown("<hr style='margin:6px 0; border-color:#E2E8F0;'>", unsafe_allow_html=True)
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Contexto Comercial
         st.markdown(f"""
         <div class="card">
-            <div class="card-titulo"> Directorio Ejecutivo</div>
-            {ejecutivos_html}
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Presencia geográfica e importaciones (extra info)
-        st.markdown(f"""
-        <div class="card">
-            <div class="card-titulo"> Contexto Comercial</div>
+            <div class="card-titulo">🌐 Contexto Comercial</div>
             <p style="font-size:0.78rem; font-weight:600; color:#374151; margin-bottom:4px;">PRESENCIA GEOGRÁFICA</p>
-            <p style="font-size:0.85rem; color:#6B7280; margin-bottom:12px;">{render_valor(datos.get('presencia_geografica'))}</p>
+            <p style="font-size:0.85rem; color:#6B7280; margin-bottom:12px;">
+                {render_valor(datos.get('presencia_geografica'))}
+            </p>
             <p style="font-size:0.78rem; font-weight:600; color:#374151; margin-bottom:4px;">COMERCIO EXTERIOR</p>
-            <p style="font-size:0.85rem; color:#6B7280; margin:0;">{render_valor(datos.get('importaciones_exportaciones'))}</p>
+            <p style="font-size:0.85rem; color:#6B7280; margin:0;">
+                {render_valor(datos.get('importaciones_exportaciones'))}
+            </p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -737,9 +750,9 @@ def renderizar_informe(datos, linkedin_ejecutivos, mercantil_link):
         if mercantil_link:
             st.markdown(f"""
             <div class="card">
-                <div class="card-titulo"> Mercantil.com</div>
+                <div class="card-titulo">📋 Mercantil.com</div>
                 <a class="mercantil-link" href="{mercantil_link}" target="_blank">
-                     Ver ficha en Mercantil.com
+                    🔗 Ver ficha en Mercantil.com
                 </a>
             </div>
             """, unsafe_allow_html=True)
@@ -751,7 +764,6 @@ def renderizar_informe(datos, linkedin_ejecutivos, mercantil_link):
         SAP Compass Corporate Finder &nbsp;·&nbsp; Powered by Claude Sonnet 4.6
     </div>
     """, unsafe_allow_html=True)
-
 
 # =============================
 # INTERFAZ PRINCIPAL
