@@ -62,10 +62,11 @@ def buscar_mercantil(empresa, pais):
 
 
 # =============================
-# FUNCIÓN: BUSCAR LINKEDIN (SerpAPI)
+# FUNCIÓN: BUSCAR LINKEDIN (SerpAPI) — mejorada
 # =============================
 def buscar_linkedin_ejecutivos(empresa, pais):
-    query = f"site:linkedin.com/in {empresa} {pais} CEO CFO gerente director ejecutivo"
+    # Búsqueda más específica incluyendo el nombre exacto de la empresa
+    query = f'site:linkedin.com/in "{empresa}" {pais} CEO CFO gerente director'
     params = {
         "engine": "google",
         "q": query,
@@ -86,38 +87,51 @@ def buscar_linkedin_ejecutivos(empresa, pais):
             title = item.get("title", "")
             snippet = item.get("snippet", "")
 
-            if "linkedin.com/in/" in link.lower():
-                # Extraer nombre y cargo del título
-                nombre = title.split(" - ")[0].strip() if " - " in title else title
-                cargo = ""
-                if " - " in title:
-                    partes = title.split(" - ")
-                    cargo = partes[1].strip() if len(partes) > 1 else ""
+            if "linkedin.com/in/" not in link.lower():
+                continue
 
-                ejecutivos.append({
-                    "nombre": nombre,
-                    "cargo": cargo,
-                    "link": link,
-                    "snippet": snippet
-                })
+            # Filtrar: el snippet o título debe mencionar la empresa
+            texto_completo = (title + " " + snippet).lower()
+            nombre_empresa_lower = empresa.lower()
+            # Tomar las primeras 2 palabras de la empresa para matching flexible
+            palabras_empresa = nombre_empresa_lower.split()[:2]
+            menciona_empresa = any(p in texto_completo for p in palabras_empresa)
 
-        return ejecutivos[:6]  # máximo 6 ejecutivos
+            if not menciona_empresa:
+                continue
+
+            nombre = title.split(" - ")[0].strip() if " - " in title else title
+            cargo = ""
+            if " - " in title:
+                partes = title.split(" - ")
+                cargo = partes[1].strip() if len(partes) > 1 else ""
+
+            ejecutivos.append({
+                "nombre": nombre,
+                "cargo": cargo,
+                "link": link,
+                "snippet": snippet
+            })
+
+        return ejecutivos[:5]
+
     except Exception:
         return []
 
-
 # =============================
-# FUNCIÓN: CONSULTAR CLAUDE
+# FUNCIÓN: CONSULTAR CLAUDE (con Web Search)
 # =============================
 def consultar_claude(empresa, pais):
     prompt = f"""Eres un analista corporativo especializado en inteligencia de cuentas para ejecutivos comerciales de SAP.
 
-Tu tarea es generar un perfil ejecutivo completo de la empresa **{empresa}** en **{pais}**.
+Tu tarea es buscar en internet y generar un perfil ejecutivo completo de la empresa **{empresa}** en **{pais}**.
 
 INSTRUCCIONES IMPORTANTES:
+- Usa la herramienta de búsqueda web para encontrar información actualizada y real sobre esta empresa.
+- Busca el sitio web oficial, noticias recientes, reportes anuales, LinkedIn de la empresa, etc.
 - Responde ÚNICAMENTE en formato JSON válido, sin texto adicional antes ni después.
-- Si no tienes información confiable sobre algún campo, escribe exactamente: "Información no disponible"
-- NO inventes ni estimes datos financieros o de personal. Solo incluye lo que conozcas con certeza.
+- Si después de buscar no encuentras información confiable sobre algún campo, escribe exactamente: "Información no disponible"
+- NO inventes ni estimes datos financieros o de personal. Solo incluye lo que encuentres con certeza.
 - Sé específico y orientado a oportunidades de negocio SAP.
 
 Devuelve el siguiente JSON:
@@ -131,7 +145,7 @@ Devuelve el siguiente JSON:
   "mision": "Misión corporativa oficial o propósito declarado",
   "vision": "Visión corporativa oficial o aspiración a largo plazo",
   "fundacion": "Año de fundación",
-  "empleados": "Cantidad aproximada de empleados (ej: 500-1000, o número exacto si se conoce)",
+  "empleados": "Cantidad aproximada de empleados",
   "facturacion_anual": "Facturación o ingresos anuales aproximados en USD o moneda local",
   "presencia_geografica": "Países o regiones donde opera",
   "importaciones_exportaciones": "Si importa o exporta, qué productos/servicios",
@@ -155,16 +169,27 @@ Devuelve el siguiente JSON:
 }}
 
 Genera máximo 3 noticias relevantes de los últimos 12-18 meses.
-Genera máximo 5 ejecutivos conocidos.
+Genera máximo 5 ejecutivos conocidos. Solo incluye ejecutivos que realmente trabajen o hayan trabajado en {empresa}.
 """
 
     try:
         message = client.messages.create(
             model=MODELO,
-            max_tokens=3000,
+            max_tokens=4000,
+            tools=[{"type": "web_search_20250305", "name": "web_search"}],
             messages=[{"role": "user", "content": prompt}]
         )
-        raw = message.content[0].text.strip()
+
+        # Extraer el texto de la respuesta (puede venir después de tool_use blocks)
+        raw = ""
+        for block in message.content:
+            if block.type == "text":
+                raw = block.text.strip()
+                break
+
+        if not raw:
+            st.error("Claude no devolvió texto. Intenta nuevamente.")
+            return None
 
         # Limpiar posibles bloques markdown
         raw = re.sub(r"```json\s*", "", raw)
@@ -173,10 +198,10 @@ Genera máximo 5 ejecutivos conocidos.
         return json.loads(raw)
 
     except json.JSONDecodeError:
-        st.error(" Claude no devolvió un JSON válido. Intenta nuevamente.")
+        st.error("Claude no devolvió un JSON válido. Intenta nuevamente.")
         return None
     except Exception as e:
-        st.error(f" Error consultando Claude: {e}")
+        st.error(f"Error consultando Claude: {e}")
         return None
 
 
