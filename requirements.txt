@@ -1,7 +1,3 @@
-google-genai
-requests
-pdfkit
-jinja2
 streamlit
 anthropic
-
+requests
