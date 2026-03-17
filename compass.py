@@ -122,68 +122,50 @@ def buscar_linkedin_ejecutivos(empresa, pais):
 # FUNCIÓN: CONSULTAR CLAUDE (con Web Search)
 # =============================
 def consultar_claude(empresa, pais):
-    prompt = f"""Eres un analista corporativo especializado en inteligencia de cuentas para ejecutivos comerciales de SAP.
-
-Tu tarea es buscar en internet y generar un perfil ejecutivo completo de la empresa **{empresa}** en **{pais}**.
-
-INSTRUCCIONES IMPORTANTES:
-- Usa la herramienta de búsqueda web para encontrar información actualizada y real sobre esta empresa.
-- Busca el sitio web oficial, noticias recientes, reportes anuales, LinkedIn de la empresa, etc.
-- Responde ÚNICAMENTE en formato JSON válido, sin texto adicional antes ni después.
-- Si después de buscar no encuentras información confiable sobre algún campo, escribe exactamente: "Información no disponible"
-- NO inventes ni estimes datos financieros o de personal. Solo incluye lo que encuentres con certeza.
-- Sé específico y orientado a oportunidades de negocio SAP.
-
-Devuelve el siguiente JSON:
+    prompt = f"""Eres un analista corporativo SAP. Busca en internet información sobre **{empresa}** en **{pais}** y devuelve SOLO este JSON sin texto adicional:
 
 {{
   "nombre_empresa": "{empresa}",
   "pais": "{pais}",
-  "sitio_web": "URL oficial de la empresa",
-  "rubro": "Industria o sector al que pertenece",
-  "descripcion": "Descripción breve de a qué se dedica la empresa (2-3 oraciones)",
-  "mision": "Misión corporativa oficial o propósito declarado",
-  "vision": "Visión corporativa oficial o aspiración a largo plazo",
-  "fundacion": "Año de fundación",
-  "empleados": "Cantidad aproximada de empleados",
-  "facturacion_anual": "Facturación o ingresos anuales aproximados en USD o moneda local",
-  "presencia_geografica": "Países o regiones donde opera",
-  "importaciones_exportaciones": "Si importa o exporta, qué productos/servicios",
-  "tecnologia_it": "Sistemas de IT conocidos o mencionados públicamente (ERP, CRM, etc.)",
-  "soluciones_sap": "Soluciones SAP que ya usan, si se sabe",
-  "oportunidades_sap": "Áreas donde SAP podría agregar valor basado en el perfil de la empresa",
+  "sitio_web": "URL oficial",
+  "rubro": "Industria o sector",
+  "descripcion": "Descripción breve (2 oraciones)",
+  "mision": "Misión oficial",
+  "vision": "Visión oficial",
+  "fundacion": "Año",
+  "empleados": "Cantidad aproximada",
+  "facturacion_anual": "Ingresos anuales",
+  "presencia_geografica": "Países donde opera",
+  "importaciones_exportaciones": "Comercio exterior",
+  "tecnologia_it": "Sistemas IT conocidos",
+  "soluciones_sap": "Soluciones SAP actuales",
+  "oportunidades_sap": "Oportunidades SAP identificadas",
   "noticias": [
-    {{
-      "titulo": "Título de la noticia",
-      "resumen": "Resumen breve",
-      "fecha": "Fecha aproximada o año",
-      "fuente": "Medio o fuente"
-    }}
+    {{"titulo": "","resumen": "","fecha": "","fuente": ""}}
   ],
   "ejecutivos_conocidos": [
-    {{
-      "nombre": "Nombre completo",
-      "cargo": "Cargo"
-    }}
+    {{"nombre": "","cargo": ""}}
   ]
 }}
 
-Genera máximo 3 noticias relevantes de los últimos 12-18 meses.
-Genera máximo 5 ejecutivos conocidos. Solo incluye ejecutivos que realmente trabajen o hayan trabajado en {empresa}.
+Reglas: máximo 3 noticias, máximo 5 ejecutivos, solo ejecutivos de {empresa}, si no hay certeza escribe "Información no disponible".
 """
 
     try:
         message = client.messages.create(
             model=MODELO,
-            max_tokens=4000,
-            tools=[{"type": "web_search_20250305", "name": "web_search"}],
+            max_tokens=2000,  # reducido de 4000
+            tools=[{
+                "type": "web_search_20250305",
+                "name": "web_search",
+                "max_uses": 3  # limitar búsquedas para reducir tokens
+            }],
             messages=[{"role": "user", "content": prompt}]
         )
 
-        # Extraer el texto de la respuesta (puede venir después de tool_use blocks)
         raw = ""
         for block in message.content:
-            if block.type == "text":
+            if hasattr(block, "type") and block.type == "text":
                 raw = block.text.strip()
                 break
 
@@ -191,7 +173,6 @@ Genera máximo 5 ejecutivos conocidos. Solo incluye ejecutivos que realmente tra
             st.error("Claude no devolvió texto. Intenta nuevamente.")
             return None
 
-        # Limpiar posibles bloques markdown
         raw = re.sub(r"```json\s*", "", raw)
         raw = re.sub(r"```\s*", "", raw)
 
@@ -203,8 +184,7 @@ Genera máximo 5 ejecutivos conocidos. Solo incluye ejecutivos que realmente tra
     except Exception as e:
         st.error(f"Error consultando Claude: {e}")
         return None
-
-
+        
 # =============================
 # CSS PERSONALIZADO
 # =============================
