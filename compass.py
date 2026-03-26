@@ -62,7 +62,7 @@ def buscar_mercantil(empresa, pais):
 
 
 # =============================
-# FUNCIÓN: BUSCAR LINKEDIN (SerpAPI) — mejorada
+# FUNCIÓN: BUSCAR LINKEDIN (SerpAPI) 
 # =============================
 def buscar_linkedin_ejecutivos(empresa, pais):
     # Búsqueda más específica incluyendo el nombre exacto de la empresa
@@ -780,7 +780,7 @@ st.markdown("""
 <div class="header-principal">
     <div class="header-badge">SAP Compass</div>
     <h1 class="header-titulo">Corporate Intelligence Finder</h1>
-    <p class="header-subtitulo">Perfilamiento ejecutivo de cuentas impulsado por IA · Argentina · Chile · Perú · Colombia</p>
+    <p class="header-subtitulo">Perfilamiento ejecutivo de cuentas · Argentina · Chile · Perú · Colombia</p>
 </div>
 """, unsafe_allow_html=True)
 
