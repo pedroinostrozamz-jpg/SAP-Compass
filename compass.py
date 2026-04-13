@@ -3,6 +3,8 @@ import anthropic
 import requests
 import json
 import re
+import base64
+import os
 from datetime import datetime
 
 # =============================
@@ -22,8 +24,22 @@ SERPAPI_KEY = st.secrets["SERPAPI_KEY"]
 MODELO = "claude-sonnet-4-6"
 PAISES_DISPONIBLES = ["Argentina", "Chile", "Perú", "Colombia"]
 
-# Logo SAP embebido como URL pública oficial (no requiere archivo local)
-SAP_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/5/59/SAP_2011_logo.svg"
+# ── Logo SAP desde archivo local (base64) ──────────────────────────
+def get_logo_base64():
+    """Carga el logo SAP desde archivo local y lo convierte a base64."""
+    logo_path = os.path.join(os.path.dirname(__file__), "SAP_R_wht_scrn__1_.png")
+    try:
+        with open(logo_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except FileNotFoundError:
+        return None
+
+_logo_b64 = get_logo_base64()
+if _logo_b64:
+    SAP_LOGO_URL = f"data:image/png;base64,{_logo_b64}"
+else:
+    # Fallback a URL pública si no se encuentra el archivo local
+    SAP_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/5/59/SAP_2011_logo.svg"
 
 try:
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -55,7 +71,6 @@ def buscar_imagenes_empresa(empresa, pais):
             images = data.get("images_results", [])
             for img in images[:5]:
                 url = img.get("original", "")
-                # Preferir imágenes pequeñas/cuadradas típicas de logos
                 if url and any(ext in url.lower() for ext in [".png", ".jpg", ".svg", ".webp"]):
                     resultados["logo"] = url
                     break
@@ -83,7 +98,7 @@ def buscar_imagenes_empresa(empresa, pais):
                 titulo = img.get("title", "")
                 if url and thumbnail:
                     fotos.append({"url": url, "thumbnail": thumbnail, "titulo": titulo})
-            resultados["fotos"] = fotos[:4]  # máximo 4 fotos
+            resultados["fotos"] = fotos[:4]
     except Exception:
         pass
 
@@ -260,7 +275,7 @@ def inyectar_css():
         padding: 36px 40px;
         position: relative;
         overflow: hidden;
-        margin-bottom: 28px;
+        margin-bottom: 20px;
     }
     .sap-hero::before {
         content: '';
@@ -338,6 +353,33 @@ def inyectar_css():
         font-size: 12px;
         color: rgba(255,255,255,0.8);
         font-weight: 400;
+    }
+
+    /* ── DISCLAIMER BANNER ── */
+    .disclaimer-banner {
+        background: linear-gradient(90deg, #FFF7ED 0%, #FFFBF5 100%);
+        border: 1px solid #FED7AA;
+        border-left: 4px solid #F97316;
+        border-radius: var(--radius);
+        padding: 13px 18px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .disclaimer-icon {
+        font-size: 1rem;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+    .disclaimer-text {
+        font-size: 0.78rem;
+        color: #92400E;
+        line-height: 1.55;
+    }
+    .disclaimer-text strong {
+        color: #78350F;
+        font-weight: 600;
     }
 
     /* ── FORM CARD ── */
@@ -879,7 +921,6 @@ def renderizar_informe(datos, linkedin_ejecutivos, mercantil_link, imagenes):
         empresa_nombre = datos.get('nombre_empresa', '')
         pais_nombre = datos.get('pais', '')
         maps_url = generar_url_maps(direccion, empresa_nombre, pais_nombre)
-
         direccion_display = direccion if es_disponible(direccion) else f"{empresa_nombre}, {pais_nombre}"
 
         st.markdown(f"""
@@ -923,7 +964,7 @@ def renderizar_informe(datos, linkedin_ejecutivos, mercantil_link, imagenes):
 # =============================
 inyectar_css()
 
-# Header principal
+# ── Hero Header ─────────────────────────────────────────────────────
 st.markdown(f"""
 <div class="sap-hero">
     <div class="hero-top">
@@ -942,7 +983,22 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Formulario
+# ── Disclaimer Banner ────────────────────────────────────────────────
+st.markdown("""
+<div class="disclaimer-banner">
+    <span class="disclaimer-icon">⚠️</span>
+    <div class="disclaimer-text">
+        <strong>Aviso importante sobre la información presentada:</strong>
+        La información contenida en este informe es generada mediante inteligencia artificial y fuentes públicas
+        disponibles en internet. Si bien se realizan esfuerzos por asegurar su precisión,
+        <strong>SAP no garantiza la exactitud, completitud ni vigencia de los datos aquí expuestos.</strong>
+        Se recomienda contrastar y validar la información con fuentes oficiales antes de tomar
+        decisiones comerciales o estratégicas basadas en este reporte.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ── Formulario ───────────────────────────────────────────────────────
 st.markdown('<div class="form-card">', unsafe_allow_html=True)
 st.markdown('<div class="form-section-label">Generar perfil corporativo</div>', unsafe_allow_html=True)
 
@@ -956,7 +1012,7 @@ with col3:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Ejecución
+# ── Ejecución ────────────────────────────────────────────────────────
 if buscar:
     if not empresa.strip():
         st.error("Por favor ingresa el nombre de una empresa.")
